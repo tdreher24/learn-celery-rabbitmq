@@ -39,7 +39,50 @@ def root():
     <h2>A Flask app with Celery and RabbitMQ</h2>
     <p>You can POST to the following endpoint to simulate sending an email asynchronously</p>
     <em>curl -X POST --header "Content-Type: application/json" --data '{"email": "john.doe@example.org", "subject": "hi from Celery!", "body": "Just a test"}' http://localhost:5000/send_email</em>
+    <br><br>
+    <button onclick="triggerWorker()">Start Worker and Show Result</button>
+<script>
+function triggerWorker() {
+    fetch('/worker')
+      .then(response => response.json())
+      .then(data => {
+          const taskId = data.task_id;
+          window.location.href = '/task_result/' + taskId;
+      });
+}
+</script>
+
     </html>"""
+
+@flask_app.get("/worker")
+def worker():
+    result = async_worker.delay()
+    return {
+        "message": "Worker endpoint triggered successfully!",
+        "task_id": result.id
+    }
+
+@flask_app.get("/task_result/<task_id>")
+def get_task_result(task_id):
+    result = AsyncResult(task_id)
+    
+    if result.state == 'PENDING':
+        return "<html><body><h2>Task pending...</h2></body></html>"
+    elif result.state != 'SUCCESS':
+        return f"<html><body><h2>Task failed or in progress: {result.state}</h2></body></html>"
+    else:
+        return result.result  # Das HTML aus der Task!
+
+
+@shared_task()
+def async_worker():
+    # simulate a very costly operation for 5 seconds
+    from time import sleep
+    sleep(5)
+    result = {"success": True}
+    # Convert JSON result to HTML
+    html_result = f"<html><body><h2>Task Result</h2><p>{result}</p></body></html>"
+    return html_result
 
 
 @flask_app.post("/send_email")
